@@ -30,6 +30,7 @@ pub struct Run {
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
     pub output: Option<String>,
+    pub journal: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

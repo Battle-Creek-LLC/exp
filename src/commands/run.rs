@@ -35,21 +35,37 @@ pub fn start(conn: &Connection, experiment: &str, vars: &[(String, String)]) -> 
     Ok(())
 }
 
-pub fn record(conn: &Connection, run_id: &str, output_source: &str) -> Result<()> {
-    let json_str = if output_source == "-" {
+fn read_json_source(source: &str) -> Result<serde_json::Value> {
+    let json_str = if source == "-" {
         let mut buf = String::new();
         std::io::stdin().read_to_string(&mut buf)?;
         buf
-    } else if output_source.starts_with('{') || output_source.starts_with('[') {
-        output_source.to_string()
+    } else if source.starts_with('{') || source.starts_with('[') {
+        source.to_string()
     } else {
-        std::fs::read_to_string(output_source)
-            .with_context(|| format!("reading output file: {output_source}"))?
+        std::fs::read_to_string(source)
+            .with_context(|| format!("reading file: {source}"))?
     };
 
-    // Validate JSON
-    let new_value: serde_json::Value =
-        serde_json::from_str(&json_str).with_context(|| "output must be valid JSON")?;
+    serde_json::from_str(&json_str).with_context(|| "must be valid JSON")
+}
+
+fn merge_json(existing: Option<String>, new_value: serde_json::Value) -> Result<String> {
+    if let Some(existing_str) = existing {
+        let mut existing_val: serde_json::Value = serde_json::from_str(&existing_str)?;
+        if let (Some(existing_obj), Some(new_obj)) = (existing_val.as_object_mut(), new_value.as_object()) {
+            for (k, v) in new_obj {
+                existing_obj.insert(k.clone(), v.clone());
+            }
+        }
+        Ok(serde_json::to_string(&existing_val)?)
+    } else {
+        Ok(serde_json::to_string(&new_value)?)
+    }
+}
+
+pub fn record(conn: &Connection, run_id: &str, output_source: &str, journal_source: Option<&str>) -> Result<()> {
+    let new_output = read_json_source(output_source).with_context(|| "output must be valid JSON")?;
 
     // Merge with existing output if any
     let existing: Option<String> = conn.query_row(
@@ -57,24 +73,33 @@ pub fn record(conn: &Connection, run_id: &str, output_source: &str) -> Result<()
         [run_id],
         |row| row.get(0),
     )?;
+    let merged_output = merge_json(existing, new_output)?;
 
-    let merged = if let Some(existing_str) = existing {
-        let mut existing_val: serde_json::Value = serde_json::from_str(&existing_str)?;
-        if let (Some(existing_obj), Some(new_obj)) = (existing_val.as_object_mut(), new_value.as_object()) {
-            for (k, v) in new_obj {
-                existing_obj.insert(k.clone(), v.clone());
-            }
-        }
-        serde_json::to_string(&existing_val)?
+    // Handle journal if provided
+    let merged_journal = if let Some(src) = journal_source {
+        let new_journal = read_json_source(src).with_context(|| "journal must be valid JSON")?;
+        let existing_journal: Option<String> = conn.query_row(
+            "SELECT journal FROM runs WHERE id = ?1",
+            [run_id],
+            |row| row.get(0),
+        )?;
+        Some(merge_json(existing_journal, new_journal)?)
     } else {
-        serde_json::to_string(&new_value)?
+        None
     };
 
     let now = db::now();
-    conn.execute(
-        "UPDATE runs SET output = ?1, status = 'completed', finished_at = ?2 WHERE id = ?3",
-        rusqlite::params![merged, now, run_id],
-    )?;
+    if let Some(journal_str) = merged_journal {
+        conn.execute(
+            "UPDATE runs SET output = ?1, journal = ?2, status = 'completed', finished_at = ?3 WHERE id = ?4",
+            rusqlite::params![merged_output, journal_str, now, run_id],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE runs SET output = ?1, status = 'completed', finished_at = ?2 WHERE id = ?3",
+            rusqlite::params![merged_output, now, run_id],
+        )?;
+    }
 
     Ok(())
 }
@@ -196,12 +221,12 @@ pub fn list(conn: &Connection, experiment: &str) -> Result<()> {
 }
 
 pub fn show(conn: &Connection, run_id: &str) -> Result<()> {
-    let (exp_id, status, started_at, finished_at, output): (
-        String, String, Option<String>, Option<String>, Option<String>,
+    let (exp_id, status, started_at, finished_at, output, journal): (
+        String, String, Option<String>, Option<String>, Option<String>, Option<String>,
     ) = conn.query_row(
-        "SELECT exp_id, status, started_at, finished_at, output FROM runs WHERE id = ?1",
+        "SELECT exp_id, status, started_at, finished_at, output, journal FROM runs WHERE id = ?1",
         [run_id],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
     ).with_context(|| format!("run not found: {run_id}"))?;
 
     let exp_name: String = conn.query_row(
@@ -239,6 +264,13 @@ pub fn show(conn: &Connection, run_id: &str) -> Result<()> {
     if let Some(output) = output {
         let pretty: serde_json::Value = serde_json::from_str(&output)?;
         println!("\nOutput:");
+        println!("{}", serde_json::to_string_pretty(&pretty)?);
+    }
+
+    // Journal
+    if let Some(journal) = journal {
+        let pretty: serde_json::Value = serde_json::from_str(&journal)?;
+        println!("\nJournal:");
         println!("{}", serde_json::to_string_pretty(&pretty)?);
     }
 

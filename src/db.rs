@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS runs (
     status      TEXT NOT NULL DEFAULT 'pending',
     started_at  TEXT,
     finished_at TEXT,
-    output      TEXT
+    output      TEXT,
+    journal     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS run_variables (
@@ -64,6 +65,10 @@ pub fn open(db_path: &Path) -> Result<Connection> {
         .with_context(|| "setting pragmas")?;
     conn.execute_batch(SCHEMA)
         .with_context(|| "initializing schema")?;
+
+    // Migration: add journal column to existing databases
+    let _ = conn.execute_batch("ALTER TABLE runs ADD COLUMN journal TEXT;");
+
     Ok(conn)
 }
 

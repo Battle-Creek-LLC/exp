@@ -189,6 +189,9 @@ enum RunCommands {
         /// Output source: file path, "-" for stdin, or inline JSON
         #[arg(long)]
         output: String,
+        /// Journal source: file path, "-" for stdin, or inline JSON (stored separately from output)
+        #[arg(long)]
+        journal: Option<String>,
     },
     /// Mark a run as failed
     Fail {
@@ -301,8 +304,8 @@ fn main() -> Result<()> {
                     .collect();
                 commands::run::start(&conn, &experiment, &parsed_vars)
             }
-            RunCommands::Record { run_id, output } => {
-                commands::run::record(&conn, &run_id, &output)
+            RunCommands::Record { run_id, output, journal } => {
+                commands::run::record(&conn, &run_id, &output, journal.as_deref())
             }
             RunCommands::Fail { run_id, reason } => {
                 commands::run::fail(&conn, &run_id, reason.as_deref())

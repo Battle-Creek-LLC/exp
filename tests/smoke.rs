@@ -444,3 +444,66 @@ fn test_record_inline_json() {
     let (stdout, _, _) = exp(&["run", "show", run_id], &db);
     assert!(stdout.contains("0.95"));
 }
+
+#[test]
+fn test_record_with_journal() {
+    let dir = temp_db();
+    let db = db_path(&dir);
+
+    exp(&["create", "journal-test"], &db);
+    let (run_id, _, _) = exp(&["run", "start", "journal-test"], &db);
+    let run_id = run_id.trim();
+
+    let (_, _, ok) = exp(
+        &["run", "record", run_id,
+          "--output", r#"{"result_count": 5, "latency_s": 12.3}"#,
+          "--journal", r#"{"prompt": "Find reviews", "discovery_text": "Found 3 results"}"#],
+        &db,
+    );
+    assert!(ok, "record with journal should succeed");
+
+    let (stdout, _, ok) = exp(&["run", "show", run_id], &db);
+    assert!(ok);
+    assert!(stdout.contains("result_count"));
+    assert!(stdout.contains("Journal:"));
+    assert!(stdout.contains("Find reviews"));
+    assert!(stdout.contains("discovery_text"));
+
+    // Verify compare does NOT show journal data
+    let (stdout, _, ok) = exp(&["compare", "journal-test"], &db);
+    assert!(ok);
+    assert!(stdout.contains("result_count"));
+    assert!(!stdout.contains("prompt"), "journal keys should not appear in compare");
+}
+
+#[test]
+fn test_record_journal_merges() {
+    let dir = temp_db();
+    let db = db_path(&dir);
+
+    exp(&["create", "journal-merge"], &db);
+    let (run_id, _, _) = exp(&["run", "start", "journal-merge"], &db);
+    let run_id = run_id.trim();
+
+    // First record with journal
+    exp(
+        &["run", "record", run_id,
+          "--output", r#"{"count": 1}"#,
+          "--journal", r#"{"prompt": "first"}"#],
+        &db,
+    );
+
+    // Second record merges both output and journal
+    exp(
+        &["run", "record", run_id,
+          "--output", r#"{"score": 0.9}"#,
+          "--journal", r#"{"response": "second"}"#],
+        &db,
+    );
+
+    let (stdout, _, _) = exp(&["run", "show", run_id], &db);
+    assert!(stdout.contains("count"));
+    assert!(stdout.contains("score"));
+    assert!(stdout.contains("first"));
+    assert!(stdout.contains("second"));
+}
