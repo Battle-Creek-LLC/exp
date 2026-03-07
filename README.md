@@ -118,6 +118,22 @@ exp plan <experiment>         # Generate shell script for remaining runs
 exp create my-test --template prompt-ab
 ```
 
+## Examples
+
+### Runnable Demo
+
+A self-contained shell script that walks through the full experiment lifecycle with simulated data:
+
+```bash
+./examples/prompt-eval.sh
+```
+
+This creates an experiment, defines variables, runs four prompt strategies, records results, and compares outcomes. Uses a temp directory — no cleanup needed.
+
+### Using exp with an AI Agent
+
+See [`examples/agent-workflow.md`](examples/agent-workflow.md) for a guide on instructing an AI agent to use `exp`. Covers what to put in your system prompt, the typical agent session flow, and tips for resumability, failure handling, and artifact management.
+
 ## Storage
 
 All data lives in a single SQLite file at `.exp/experiments.db` (relative to the working directory). Override with `EXP_DB` env var or `--db <path>`.
