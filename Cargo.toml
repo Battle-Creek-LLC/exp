@@ -2,6 +2,12 @@
 name = "exp"
 version = "0.1.0"
 edition = "2024"
+description = "CLI experiment tracker for agent runs, prompt testing, and simulations"
+license = "MIT"
+repository = "https://github.com/jstockdi/exp"
+readme = "README.md"
+keywords = ["experiment", "cli", "tracking", "agent"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
