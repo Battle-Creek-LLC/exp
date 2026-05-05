@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-05-05
+
+### Changed
+
+- Update the `repository` field in `Cargo.toml` to point at the new
+  Battle-Creek-LLC home. First release published to crates.io
+  (`cargo install exp`).
+
 ## [0.1.0] — 2026-04-29
 
 First tagged release. `exp` is a CLI experiment tracker for agent runs,
@@ -26,4 +34,5 @@ runtime dependencies.
 - Prebuilt binaries on each tagged release for Linux (x86_64, aarch64),
   macOS (x86_64, aarch64), and Windows (x86_64).
 
+[0.1.1]: https://github.com/Battle-Creek-LLC/exp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Battle-Creek-LLC/exp/releases/tag/v0.1.0
